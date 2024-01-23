@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "otrium-order-details"
+name = "baanreserveren-actor"
 dynamic = ["version", "dependencies"]
 
 [tool.black]

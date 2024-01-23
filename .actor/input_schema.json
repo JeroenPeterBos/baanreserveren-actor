@@ -1,27 +1,67 @@
 {
-    "title": "Helloprint Order Screenshots",
+    "title": "Baanreserveren Actor",
     "type": "object",
     "properties": {
-        "onl_number": {
-            "title": "Onl Number",
-            "description": "ONL number",
-            "default": "1234567",
-            "type": "string",
-            "editor": "textfield",
-            "prefill": "1234567"
+        "dry_run": {
+            "title": "Dry Run",
+            "description": "Don't actually place the reservation",
+            "default": true,
+            "type": "boolean"
         },
-        "out_number": {
-            "title": "Out Number",
-            "description": "OUT number",
+        "date": {
+            "title": "Date",
+            "description": "The date to book a slot on, format: yyyy-mm-dd",
             "type": "string",
             "editor": "textfield"
         },
-        "save_screenshots": {
-            "title": "Save Screenshots",
-            "description": "Save screenshots to files in the key-value store",
-            "default": false,
+        "opponent": {
+            "title": "Opponent",
+            "description": "The opponent to book a slot with",
+            "default": "vera",
+            "enum": [
+                "vera",
+                "koen"
+            ],
+            "type": "string",
+            "editor": "textfield",
+            "prefill": "vera"
+        },
+        "times": {
+            "title": "Times",
+            "description": "The times to try to book a slot on the leden banen",
+            "default": [
+                "20:30",
+                "19:45",
+                "21:15",
+                "19:00"
+            ],
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        },
+        "leden_only": {
+            "title": "Leden Only",
+            "description": "Only try to book a slot on the leden banen",
+            "default": true,
             "type": "boolean"
+        },
+        "non_leden_times": {
+            "title": "Non Leden Times",
+            "description": "The times to try to book a slot on the non-leden banen",
+            "default": [
+                "20:15",
+                "19:30",
+                "21:00"
+            ],
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
         }
     },
+    "required": [
+        "date"
+    ],
     "schemaVersion": 1
 }

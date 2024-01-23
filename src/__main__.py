@@ -10,7 +10,7 @@ import logging
 
 from apify.log import ActorLogFormatter
 
-from .hp_order_screenshots import main
+from .baanreserveren import main
 
 # Configure loggers
 handler = logging.StreamHandler()
@@ -23,6 +23,10 @@ apify_client_logger.addHandler(handler)
 apify_logger = logging.getLogger("apify")
 apify_logger.setLevel(logging.DEBUG)
 apify_logger.addHandler(handler)
+
+main_logger = logging.getLogger("src.baanreserveren")
+main_logger.setLevel(logging.DEBUG)
+main_logger.addHandler(handler)
 
 # Execute the Actor main coroutine
 asyncio.run(main())
