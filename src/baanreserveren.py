@@ -11,6 +11,7 @@ import asyncio
 import logging
 from itertools import zip_longest
 from datetime import datetime, timedelta
+from multiprocessing import Value
 
 # Apify SDK - toolkit for building Apify Actors, read more at https://docs.apify.com/sdk/python
 from apify import Actor
@@ -74,13 +75,22 @@ async def read_date(page: Page) -> datetime:
 
 async def select_date(settings: Settings, args: Input, page: Page):
     if args.reservation_date is None:
-        log.info("No reservation date specified, defaulting to one week from now")
-        date = datetime.today() + timedelta(days=7)
+        log.info("No reservation date specified")
+
+        if args.reservation_default == "next_week":
+            date = datetime.today() + timedelta(days=7)
+        elif args.reservation_default == "today":
+            date = datetime.today()
+
+        log.info("Reservation default: %s. Defaulting to %s", args.reservation_default, date.strftime("%Y-%m-%d"))
     else:
         date = datetime.strptime(args.reservation_date, "%Y-%m-%d")
 
-    if date < datetime.today():
+    if date.date() < datetime.today().date():
         raise ValueError("Requested date is in the past")
+
+    if date.date().strftime("%Y-%m-%d") in args.reservation_skip:
+        raise ValueError("Requested date is in the skip list")
 
     current_date = await read_date(page)
     while current_date.date() < date.date():

@@ -14,6 +14,18 @@
             "type": "string",
             "editor": "datepicker"
         },
+        "reservation_default": {
+            "title": "Reservation Default",
+            "description": "The default date to book a slot on if no explicit date is given",
+            "default": "next_week",
+            "enum": [
+                "next_week",
+                "today"
+            ],
+            "type": "string",
+            "editor": "select",
+            "prefill": "next_week"
+        },
         "opponent": {
             "title": "Opponent",
             "description": "The opponent to book a slot with",

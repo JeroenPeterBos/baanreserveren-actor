@@ -15,6 +15,12 @@ class Input(BaseModel):
     reservation_date: str = Field(
         default=None, description="The date to book a slot on, format: yyyy-mm-dd. Defaults to one week from now"
     )
+    reservation_default: Literal["next_week", "today"] = Field(
+        default="next_week", description="The default date to book a slot on if no explicit date is given"
+    )
+    reservation_skip: list[str] = Field(
+        default=[], description="The dates to skip when trying to book a slot, format: yyyy-mm-dd"
+    )
     opponent: Literal["vera", "koen"] = Field(default="vera", description="The opponent to book a slot with")
     times: list[str] = Field(
         default=["20:30", "19:45"],
