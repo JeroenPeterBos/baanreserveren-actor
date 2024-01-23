@@ -26,6 +26,16 @@
             "editor": "select",
             "prefill": "next_week"
         },
+        "reservation_skip": {
+            "title": "Reservation Skip",
+            "description": "The dates to skip when trying to book a slot, format: yyyy-mm-dd",
+            "default": [],
+            "type": "array",
+            "items": {
+                "type": "string"
+            },
+            "editor": "stringList"
+        },
         "opponent": {
             "title": "Opponent",
             "description": "The opponent to book a slot with",
