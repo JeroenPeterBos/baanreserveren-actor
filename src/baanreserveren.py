@@ -73,19 +73,23 @@ async def read_date(page: Page) -> datetime:
 
 
 async def select_date(settings: Settings, args: Input, page: Page):
-    date = datetime.strptime(args.reservation_date, "%Y-%m-%d")
+    if args.reservation_date is None:
+        log.info("No reservation date specified, defaulting to one week from now")
+        date = datetime.today() + timedelta(days=7)
+    else:
+        date = datetime.strptime(args.reservation_date, "%Y-%m-%d")
 
     if date < datetime.today():
         raise ValueError("Requested date is in the past")
 
     current_date = await read_date(page)
-    while current_date < date:
+    while current_date.date() < date.date():
         await page.click('a.matrix-date-nav[data-offset="+1"]')
         await asyncio.sleep(0.5)
         current_date = await read_date(page)
 
     log.info(
-        "Current date %s is equal to the desired date %s",
+        "Selected date %s is equal to the desired date %s",
         current_date.strftime("%Y-%m-%d"),
         date.strftime("%Y-%m-%d"),
     )
@@ -112,9 +116,10 @@ async def select_slot(settings: Settings, args: Input, page: Page):
                 await page.click('a[tooltip="Sluiten"]')
                 log.info("Skipping court 1 slot at %s", time)
             else:
-                break
+                log.info("Selected one of the %s slots available at %s", len(slots), time)
+                return True
 
-    log.info("Selected one of the %s slots available at %s", len(slots), time)
+    return False
 
 
 async def place_reservation(settings: Settings, args: Input, page: Page):
@@ -126,14 +131,23 @@ async def place_reservation(settings: Settings, args: Input, page: Page):
         log.info("Succesfully placed the reservation with %s", args.opponent)
     else:
         log.info("[DRY RUN] Not actually placing the reservation")
-        await asyncio.sleep(3)
+        await asyncio.sleep(1)
+
+    return True
 
 
 async def run(settings: Settings, args: Input, page: Page):
     await login(settings, page)
     await select_date(settings, args, page)
-    await select_slot(settings, args, page)
-    await place_reservation(settings, args, page)
+    success = await select_slot(settings, args, page)
+
+    if not success:
+        raise Exception("Failed to select a slot")
+
+    success = await place_reservation(settings, args, page)
+
+    if not success:
+        raise Exception("Failed to place reservation")
 
     log.info("Placed reservation successfully")
 

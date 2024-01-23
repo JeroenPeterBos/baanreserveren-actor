@@ -29,4 +29,11 @@ main_logger.setLevel(logging.DEBUG)
 main_logger.addHandler(handler)
 
 # Execute the Actor main coroutine
-asyncio.run(main())
+
+
+async def run_main_on_timeout():
+    async with asyncio.timeout(3 * 60):
+        await main()
+
+
+asyncio.run(run_main_on_timeout())

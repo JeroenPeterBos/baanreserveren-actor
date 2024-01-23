@@ -12,7 +12,9 @@ class Settings(BaseSettings):
 
 class Input(BaseModel):
     dry_run: bool = Field(default=True, description="Don't actually place the reservation")
-    reservation_date: str = Field(description="The date to book a slot on, format: yyyy-mm-dd")
+    reservation_date: str = Field(
+        default=None, description="The date to book a slot on, format: yyyy-mm-dd. Defaults to one week from now"
+    )
     opponent: Literal["vera", "koen"] = Field(default="vera", description="The opponent to book a slot with")
     times: list[str] = Field(
         default=["20:30", "19:45"],
