@@ -23,7 +23,7 @@
                 "koen"
             ],
             "type": "string",
-            "editor": "textfield",
+            "editor": "select",
             "prefill": "vera"
         },
         "times": {
