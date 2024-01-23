@@ -12,7 +12,6 @@
             "title": "Reservation Date",
             "description": "The date to book a slot on, format: yyyy-mm-dd",
             "type": "string",
-            "format": "date",
             "editor": "datepicker"
         },
         "opponent": {
