@@ -39,6 +39,9 @@ if __name__ == "__main__":
             if field.get("default"):
                 field["prefill"] = field["default"]
 
+        if field["type"] == "array":
+            field["editor"] = "javascript"
+
     json_schema["title"] = "Baanreserveren Actor"
     json_schema["schemaVersion"] = 1
 
