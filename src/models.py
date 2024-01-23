@@ -32,7 +32,10 @@ if __name__ == "__main__":
     # depending on the type set `editor` and depending on the default set `prefill``
     for field in json_schema["properties"].values():
         if field["type"] == "string":
-            field["editor"] = "textfield"
+            if "enum" in field:
+                field["editor"] = "select"
+            else:
+                field["editor"] = "textfield"
             if field.get("default"):
                 field["prefill"] = field["default"]
 
