@@ -73,7 +73,7 @@ async def read_date(page: Page) -> datetime:
 
 
 async def select_date(settings: Settings, args: Input, page: Page):
-    date = args.reservation_date
+    date = datetime.strptime(args.reservation_date, "%Y-%m-%d")
 
     if date < datetime.today():
         raise ValueError("Requested date is in the past")
@@ -125,7 +125,7 @@ async def place_reservation(settings: Settings, args: Input, page: Page):
         await page.click('input#__make_submit2[type="submit"]')
         log.info("Succesfully placed the reservation with %s", args.opponent)
     else:
-        log.info("Dry run, not placing the reservation")
+        log.info("[DRY RUN] Not actually placing the reservation")
         await asyncio.sleep(3)
 
 

@@ -15,12 +15,12 @@ class Input(BaseModel):
     reservation_date: str = Field(description="The date to book a slot on, format: yyyy-mm-dd")
     opponent: Literal["vera", "koen"] = Field(default="vera", description="The opponent to book a slot with")
     times: list[str] = Field(
-        default=["20:30", "19:45", "21:15", "19:00"],
+        default=["20:30", "19:45"],
         description="The times to try to book a slot on the leden banen",
     )
     leden_only: bool = Field(default=True, description="Only try to book a slot on the leden banen")
     non_leden_times: list[str] = Field(
-        default=["20:15", "19:30", "21:00"],
+        default=["20:15", "19:30"],
         description="The times to try to book a slot on the non-leden banen",
     )
 
