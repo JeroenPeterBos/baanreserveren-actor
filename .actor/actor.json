@@ -1,9 +1,9 @@
 {
 	"actorSpecification": 1,
-	"name": "baanreserveren-actor2",
-	"title": "Scrape single page in Python",
-	"description": "Scrape data from single page with provided URL.",
-	"version": "0.0",
+	"name": "helloprint-order-demo",
+	"title": "Helloprint Order Screenshots",
+	"description": "Extract the order screenshots from the Helloprint order page",
+	"version": "0.1",
 	"meta": {
 		"templateId": "python-start"
 	},

@@ -20,6 +20,8 @@ RUN echo "Python version:" \
  && echo "All installed Python packages:" \
  && pip freeze
 
+RUN playwright install-deps && playwright install chromium
+
 # Next, copy the remaining files and directories with the source code.
 # Since we do this after installing the dependencies, quick build will be really fast
 # for most source file changes.

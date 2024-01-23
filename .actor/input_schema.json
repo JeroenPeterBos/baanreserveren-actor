@@ -1,15 +1,27 @@
 {
-    "title": "Scrape data from a web page",
+    "title": "Helloprint Order Screenshots",
     "type": "object",
-    "schemaVersion": 1,
     "properties": {
-        "url": {
-            "title": "URL of the page",
+        "onl_number": {
+            "title": "Onl Number",
+            "description": "ONL number",
+            "default": "1234567",
             "type": "string",
-            "description": "The URL of website you want to get the data from.",
             "editor": "textfield",
-            "prefill": "https://www.apify.com/"
+            "prefill": "1234567"
+        },
+        "out_number": {
+            "title": "Out Number",
+            "description": "OUT number",
+            "type": "string",
+            "editor": "textfield"
+        },
+        "save_screenshots": {
+            "title": "Save Screenshots",
+            "description": "Save screenshots to files in the key-value store",
+            "default": false,
+            "type": "boolean"
         }
     },
-    "required": ["url"]
+    "schemaVersion": 1
 }

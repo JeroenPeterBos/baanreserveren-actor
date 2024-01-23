@@ -4,6 +4,7 @@ A template for [web scraping](https://apify.com/web-scraping) data from a single
 
 The scraped data in this template are page headings but you can easily edit the code to scrape whatever you want from the page.
 
+
 ## Included features
 
 - **[Apify SDK](https://docs.apify.com/sdk/python/)** for Python - a toolkit for building Apify [Actors](https://apify.com/actors) and scrapers in Python
@@ -12,6 +13,7 @@ The scraped data in this template are page headings but you can easily edit the 
 - **[Dataset](https://docs.apify.com/sdk/python/docs/concepts/storages#working-with-datasets)** - store structured data where each object stored has the same attributes
 - **[HTTPX](https://www.python-httpx.org)** - library for making asynchronous HTTP requests in Python
 - **[Beautiful Soup](https://www.crummy.com/software/BeautifulSoup/bs4/doc/)** - library for pulling data out of HTML and XML files
+
 
 ## How it works
 
@@ -23,6 +25,7 @@ The scraped data in this template are page headings but you can easily edit the 
     for heading in soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"]):
     ```
 5. `Actor.push_data(headings)` stores the headings in the dataset
+
 
 ## Resources
 

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "otrium-order-details"
+dynamic = ["version", "dependencies"]
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+[tool.isort]
+profile = "black"
+line_length = 120
+
+[tool.autoflake]
+remove-all-unused-imports = true
+ignore-init-module-imports = true
+recursive = true
+in-place = true
+
+[tool.flake8]
+max-line-length = 120
+ignore = ['E101', 'E111', 'E112', 'E221', 'E222', 'E501', 'E711', 'E712', 'W503', 'W504', 'F401']
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
