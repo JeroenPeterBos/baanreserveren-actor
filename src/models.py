@@ -1,5 +1,5 @@
 from typing import Literal
-from datetime import datetime
+from datetime import date
 from pydantic import BaseModel, BaseSettings, Field
 
 
@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
 class Input(BaseModel):
     dry_run: bool = Field(default=True, description="Don't actually place the reservation")
-    date: datetime = Field(description="The date to book a slot on, format: yyyy-mm-dd")
+    reservation_date: date = Field(description="The date to book a slot on, format: yyyy-mm-dd")
     opponent: Literal["vera", "koen"] = Field(default="vera", description="The opponent to book a slot with")
     times: list[str] = Field(
         default=["20:30", "19:45", "21:15", "19:00"],
@@ -35,6 +35,8 @@ if __name__ == "__main__":
         if field["type"] == "string":
             if "enum" in field:
                 field["editor"] = "select"
+            if "format" in field and field["format"] == "date":
+                field["editor"] = "datepicker"
             else:
                 field["editor"] = "textfield"
             if field.get("default"):

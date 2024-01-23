@@ -8,12 +8,12 @@
             "default": true,
             "type": "boolean"
         },
-        "date": {
-            "title": "Date",
+        "reservation_date": {
+            "title": "Reservation Date",
             "description": "The date to book a slot on, format: yyyy-mm-dd",
             "type": "string",
-            "format": "date-time",
-            "editor": "textfield"
+            "format": "date",
+            "editor": "datepicker"
         },
         "opponent": {
             "title": "Opponent",
@@ -24,7 +24,7 @@
                 "koen"
             ],
             "type": "string",
-            "editor": "select",
+            "editor": "textfield",
             "prefill": "vera"
         },
         "times": {
@@ -64,7 +64,7 @@
         }
     },
     "required": [
-        "date"
+        "reservation_date"
     ],
     "schemaVersion": 1
 }

@@ -73,7 +73,7 @@ async def read_date(page: Page) -> datetime:
 
 
 async def select_date(settings: Settings, args: Input, page: Page):
-    date = args.date
+    date = args.reservation_date
 
     if date < datetime.today():
         raise ValueError("Requested date is in the past")
