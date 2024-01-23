@@ -39,7 +39,7 @@
             "items": {
                 "type": "string"
             },
-            "editor": "javascript"
+            "editor": "stringList"
         },
         "leden_only": {
             "title": "Leden Only",
@@ -59,7 +59,7 @@
             "items": {
                 "type": "string"
             },
-            "editor": "javascript"
+            "editor": "stringList"
         }
     },
     "required": [

@@ -40,9 +40,11 @@ if __name__ == "__main__":
                 field["prefill"] = field["default"]
 
         if field["type"] == "array":
-            field["editor"] = "javascript"
+            if field["items"]["type"] == "string":
+                field["editor"] = "stringList"
 
     json_schema["title"] = "Baanreserveren Actor"
     json_schema["schemaVersion"] = 1
 
-    print(json.dumps(json_schema, indent=4))
+    with open(".actor/input_schema.json", "w") as f:
+        f.write(json.dumps(json_schema, indent=4))
