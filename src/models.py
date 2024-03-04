@@ -11,6 +11,10 @@ class Settings(BaseSettings):
 
 
 class Input(BaseModel):
+    update_calendar: bool = Field(
+        default=False,
+        description="Scrape the reservations and update the ical file. If true, the other fields are ignored",
+    )
     dry_run: bool = Field(default=True, description="Don't actually place the reservation")
     reservation_date: str = Field(
         default=None, description="The date to book a slot on, format: yyyy-mm-dd. Defaults to one week from now"

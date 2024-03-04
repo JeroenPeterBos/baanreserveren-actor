@@ -2,6 +2,12 @@
     "title": "Baanreserveren Actor",
     "type": "object",
     "properties": {
+        "update_calendar": {
+            "title": "Update Calendar",
+            "description": "Scrape the reservations and update the ical file. If true, the other fields are ignored",
+            "default": false,
+            "type": "boolean"
+        },
         "dry_run": {
             "title": "Dry Run",
             "description": "Don't actually place the reservation",

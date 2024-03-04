@@ -15,19 +15,27 @@ from multiprocessing import Value
 
 # Apify SDK - toolkit for building Apify Actors, read more at https://docs.apify.com/sdk/python
 from apify import Actor
+from icalendar import Calendar, Event, vText
+
+import boto3
 
 # We use playwright for scraping, read more at https://playwright.dev/python/docs/api/class-playwright
 from playwright.async_api import Page, async_playwright
+import pytz
 
 # We use pydantic for parsing te input and loading the environment variables, read more at https://pydantic-docs.helpmanual.io/
 
 from src.models import Input, Settings
+from src.utils import to_snake_case
 
 
 log = logging.getLogger(__name__)
 print(log.name)
 
 URL_LOGIN = "https://squtrecht.baanreserveren.nl/"
+URL_RESERVATIONS = "https://squtrecht.baanreserveren.nl/user/future"
+CALENDAR_BUCKET = "apify-squash-utrecht"
+CALENDAR_OBJECT = "calendar/reservations.ics"
 DEVICE = "Desktop Chrome"
 OPPONENTS = {
     "vera": "1073483",
@@ -146,7 +154,7 @@ async def place_reservation(settings: Settings, args: Input, page: Page):
     return True
 
 
-async def run(settings: Settings, args: Input, page: Page):
+async def run_reserver(settings: Settings, args: Input, page: Page):
     await login(settings, page)
     await select_date(settings, args, page)
     success = await select_slot(settings, args, page)
@@ -162,6 +170,94 @@ async def run(settings: Settings, args: Input, page: Page):
     log.info("Placed reservation successfully")
 
 
+async def create_calendar(page: Page):
+    await page.goto(URL_RESERVATIONS)
+
+    reservations_locator = page.locator(
+        "//th[contains(text(), 'Reserveringen')]/ancestor::tbody/tr[@class='odd' or @class='even']"
+    )
+
+    log.info("Found %s reservations", await reservations_locator.count())
+    headers = [
+        to_snake_case(header)
+        for header in await page.locator(
+            "//th[contains(text(), 'Reserveringen')]/ancestor::tbody/tr[@class='tblTitle'][1]/td"
+        ).all_inner_texts()
+    ]
+
+    reservations = [
+        {
+            header: value.strip()
+            for header, value in zip(
+                headers,
+                await reservations_locator.nth(reservation_index).locator("td").all_inner_texts(),
+            )
+        }
+        for reservation_index in range(await reservations_locator.count())
+    ]
+
+    # Create a calendar
+    cal = Calendar()
+
+    # Add some properties to the calendar
+    cal.add("prodid", "-//Jeroen Squash Utrecht//mxm.dk//")
+    cal.add("version", "2.0")
+    cal.add("x-wr-calname", "Squash Reserveringen")
+
+    amsterdam_tz = pytz.timezone("Europe/Amsterdam")
+
+    for reservation in reservations:
+        event = Event()
+
+        # Parse date and time
+        date_str = reservation["datum"] + " " + reservation["begintijd"]
+        start_datetime = amsterdam_tz.localize(datetime.strptime(date_str, "%d-%m-%Y %H:%M"))
+        # Assuming the duration of each reservation is 1 hour
+        end_datetime = start_datetime + timedelta(hours=1)
+
+        # Format summary
+        summary = f"Squash {reservation['baan']} {reservation['begintijd']}"
+
+        # Set event properties
+        event.add("summary", summary)
+        event.add("dtstart", start_datetime)
+        event.add("dtend", end_datetime)
+        event.add("location", vText("Squash Utrecht"))
+
+        # Generate a UID for each event, for example using the start datetime and court number
+        uid = f"squash-{reservation['datum'].replace('-', '')}-{reservation['begintijd'].replace(':', '')}-{reservation['baan'].replace(' ', '')}@example.com"
+        event.add("uid", uid)
+
+        # Add the current timestamp as dtstamp
+        event.add("dtstamp", datetime.now())
+
+        # Add the event to the calendar
+        cal.add_component(event)
+
+    return cal
+
+
+async def upload_calendar_to_s3(calendar: Calendar):
+    s3_client = boto3.client("s3")
+    try:
+        s3_client.put_object(
+            Bucket=CALENDAR_BUCKET,
+            Key=CALENDAR_OBJECT,
+            Body=calendar.to_ical(),
+            ContentType="text/calendar",
+        )
+        log.info("File uploaded successfully.")
+    except Exception as e:
+        log.error(f"Upload failed: {e}")
+        raise e
+
+
+async def run_calendar_updater(settings: Settings, args: Input, page: Page):
+    await login(settings, page)
+    calendar = await create_calendar(page)
+    await upload_calendar_to_s3(calendar)
+
+
 async def main() -> None:
     """main() is executed when the module is run"""
     settings = Settings()
@@ -172,6 +268,9 @@ async def main() -> None:
         context = await browser.new_context(**device)
         page = await context.new_page()
 
-        await run(settings=settings, args=args, page=page)
+        if args.update_calendar:
+            await run_calendar_updater(settings=settings, args=args, page=page)
+        else:
+            await run_reserver(settings=settings, args=args, page=page)
 
         await browser.close()
