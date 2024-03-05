@@ -36,8 +36,6 @@ print(log.name)
 URL_LOGIN = "https://squtrecht.baanreserveren.nl/"
 URL_RESERVATIONS = "https://squtrecht.baanreserveren.nl/user/future"
 CALENDAR_BUCKET = "apify-squash-utrecht"
-CALENDAR_OBJECT = "calendar/reservations.ics"
-RESERVATIONS_JSON_OBJECT = "calendar/reservations.json"
 DEVICE = "Desktop Chrome"
 OPPONENTS = {
     "vera": "1073483",
@@ -187,16 +185,23 @@ async def get_future_reservations(page: Page) -> list[dict]:
         ).all_inner_texts()
     ]
 
-    reservations = [
-        {
+    reservations = []
+    for reservation_index in range(await reservations_locator.count()):
+        reservation = {
             header: value.strip()
             for header, value in zip(
                 headers,
                 await reservations_locator.nth(reservation_index).locator("td").all_inner_texts(),
             )
         }
-        for reservation_index in range(await reservations_locator.count())
-    ]
+
+        await reservations_locator.nth(reservation_index).locator("a").click()
+        await page.wait_for_selector("//*[contains(text(), 'Speler 1')]")
+
+        reservation["spelers"] = await page.locator("//div[@class='res-info-player-name']").all_inner_texts()
+        reservations.append(reservation)
+
+        await page.click("//input[@value='Terug']")
 
     return reservations
 
@@ -244,13 +249,21 @@ async def create_calendar(reservations: list[dict]):
     return cal
 
 
-async def combine_reservations(previous_reservations, future_reservations):
+async def combine_with_old_reservations(reservations_key, future_reservations, player: str = None):
+    previous_reservations = json.loads((await load_bytes_from_s3(reservations_key)).decode("utf-8"))
     today = datetime.now().date()
     previous_reservations = [
         reservation
         for reservation in previous_reservations
         if datetime.strptime(reservation["datum"], "%d-%m-%Y").date() < today
     ]
+
+    if player is not None:
+        future_reservations = [
+            reservation
+            for reservation in future_reservations
+            if any(player in p.lower() for p in reservation["spelers"])
+        ]
 
     reservations = previous_reservations + future_reservations
     log.info(
@@ -295,13 +308,19 @@ async def load_bytes_from_s3(key):
 
 async def run_calendar_updater(settings: Settings, args: Input, page: Page):
     await login(settings, page)
-    previous_reservations = json.loads((await load_bytes_from_s3(RESERVATIONS_JSON_OBJECT)).decode("utf-8"))
     future_reservations = await get_future_reservations(page)
-    reservations = await combine_reservations(previous_reservations, future_reservations)
-    json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
-    await upload_bytes_to_s3(RESERVATIONS_JSON_OBJECT, json_bytes, content_type="application/json")
-    calendar = await create_calendar(reservations=reservations)
-    await upload_bytes_to_s3(CALENDAR_OBJECT, calendar.to_ical(), content_type="text/calendar")
+
+    for player in (None, "vera"):
+        calendar_key = "calendar/reservations.ics" if player is None else f"calendar/reservations-{player}.ics"
+        reservations_key = "calendar/reservations.json" if player is None else f"calendar/reservations-{player}.json"
+
+        reservations = await combine_with_old_reservations(reservations_key, future_reservations, player=player)
+
+        json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
+        await upload_bytes_to_s3(reservations_key, json_bytes, content_type="application/json")
+
+        calendar = await create_calendar(reservations=reservations)
+        await upload_bytes_to_s3(calendar_key, calendar.to_ical(), content_type="text/calendar")
 
 
 async def main() -> None:
