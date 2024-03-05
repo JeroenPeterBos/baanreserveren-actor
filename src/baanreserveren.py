@@ -16,7 +16,7 @@ from multiprocessing import Value
 
 # Apify SDK - toolkit for building Apify Actors, read more at https://docs.apify.com/sdk/python
 from apify import Actor
-from icalendar import Calendar, Event, vText
+from icalendar import Calendar, Event, Timezone, TimezoneDaylight, TimezoneStandard, vText
 
 import boto3
 
@@ -215,6 +215,30 @@ async def create_calendar(reservations: list[dict]):
     cal.add("version", "2.0")
     cal.add("x-wr-calname", "Squash Reserveringen")
 
+    # Create a VTIMEZONE component for Europe/Amsterdam
+    tz = Timezone()
+    tz.add('tzid', 'Europe/Amsterdam')
+    tz.add('x-lic-location', 'Europe/Amsterdam')
+
+    # Standard Time Component (assuming standard time here, adjust as necessary)
+    std = TimezoneStandard()
+    std.add('dtstart', datetime(1970, 10, 25, 3, 0, 0))
+    std.add('tzoffsetfrom', timedelta(hours=2))
+    std.add('tzoffsetto', timedelta(hours=1))
+    std.add('tzname', 'CET')
+    tz.add_component(std)
+
+    # Daylight Saving Time Component (if applicable, adjust as necessary)
+    dst = TimezoneDaylight()
+    dst.add('dtstart', datetime(1970, 3, 29, 2, 0, 0))
+    dst.add('tzoffsetfrom', timedelta(hours=1))
+    dst.add('tzoffsetto', timedelta(hours=2))
+    dst.add('tzname', 'CEST')
+    tz.add_component(dst)
+
+    # Add the VTIMEZONE component to your calendar before adding events
+    cal.add_component(tz)
+
     amsterdam_tz = pytz.timezone("Europe/Amsterdam")
 
     for reservation in reservations:
@@ -236,7 +260,7 @@ async def create_calendar(reservations: list[dict]):
         event.add("dtend", end_datetime)
         event.add("location", vText("Squash Utrecht"))
         if "spelers" in reservation:
-            event.add("description", "Spelers:\n\t-" + "\n\t-".join(reservation["spelers"]))
+            event.add("description", "Spelers: " + ", ".join(reservation["spelers"]))
 
         # Generate a UID for each event, for example using the start datetime and court number
         uid = f"squash-{reservation['datum'].replace('-', '')}-{reservation['begintijd'].replace(':', '')}-{reservation['baan'].replace(' ', '')}@example.com"
