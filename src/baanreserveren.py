@@ -235,6 +235,8 @@ async def create_calendar(reservations: list[dict]):
         event.add("dtstart", start_datetime)
         event.add("dtend", end_datetime)
         event.add("location", vText("Squash Utrecht"))
+        if "spelers" in reservation:
+            event.add("description", "Spelers:\n\t-" + "\n\t-".join(reservation["spelers"]))
 
         # Generate a UID for each event, for example using the start datetime and court number
         uid = f"squash-{reservation['datum'].replace('-', '')}-{reservation['begintijd'].replace(':', '')}-{reservation['baan'].replace(' ', '')}@example.com"
