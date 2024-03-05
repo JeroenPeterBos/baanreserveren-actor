@@ -8,6 +8,7 @@ https://docs.apify.com/sdk/python
 """
 
 import asyncio
+import json
 import logging
 from itertools import zip_longest
 from datetime import datetime, timedelta
@@ -36,6 +37,7 @@ URL_LOGIN = "https://squtrecht.baanreserveren.nl/"
 URL_RESERVATIONS = "https://squtrecht.baanreserveren.nl/user/future"
 CALENDAR_BUCKET = "apify-squash-utrecht"
 CALENDAR_OBJECT = "calendar/reservations.ics"
+RESERVATIONS_JSON_OBJECT = "calendar/reservations.json"
 DEVICE = "Desktop Chrome"
 OPPONENTS = {
     "vera": "1073483",
@@ -170,7 +172,7 @@ async def run_reserver(settings: Settings, args: Input, page: Page):
     log.info("Placed reservation successfully")
 
 
-async def create_calendar(page: Page):
+async def get_future_reservations(page: Page) -> list[dict]:
     await page.goto(URL_RESERVATIONS)
 
     reservations_locator = page.locator(
@@ -196,6 +198,10 @@ async def create_calendar(page: Page):
         for reservation_index in range(await reservations_locator.count())
     ]
 
+    return reservations
+
+
+async def create_calendar(reservations: list[dict]):
     # Create a calendar
     cal = Calendar()
 
@@ -216,7 +222,8 @@ async def create_calendar(page: Page):
         end_datetime = start_datetime + timedelta(hours=1)
 
         # Format summary
-        summary = f"Squash {reservation['baan']} {reservation['begintijd']}"
+        squash_emoji = "\U0001F3F8"
+        summary = f"{squash_emoji} {reservation['baan']} {reservation['begintijd']}"
 
         # Set event properties
         event.add("summary", summary)
@@ -237,25 +244,64 @@ async def create_calendar(page: Page):
     return cal
 
 
-async def upload_calendar_to_s3(calendar: Calendar):
+async def combine_reservations(previous_reservations, future_reservations):
+    today = datetime.now().date()
+    previous_reservations = [
+        reservation
+        for reservation in previous_reservations
+        if datetime.strptime(reservation["datum"], "%d-%m-%Y").date() < today
+    ]
+
+    reservations = previous_reservations + future_reservations
+    log.info(
+        "Combined %s previous and %s future reservations with a resulting %s reservations",
+        len(previous_reservations),
+        len(future_reservations),
+        len(reservations),
+    )
+
+    return reservations
+
+
+async def upload_bytes_to_s3(key, bytes, content_type):
     s3_client = boto3.client("s3")
     try:
         s3_client.put_object(
             Bucket=CALENDAR_BUCKET,
-            Key=CALENDAR_OBJECT,
-            Body=calendar.to_ical(),
-            ContentType="text/calendar",
+            Key=key,
+            Body=bytes,
+            ContentType=content_type,
         )
-        log.info("File uploaded successfully.")
+        log.info("File %s of type %s uploaded successfully.", key, content_type)
     except Exception as e:
         log.error(f"Upload failed: {e}")
         raise e
 
 
+async def load_bytes_from_s3(key):
+    s3_client = boto3.client("s3")
+    try:
+        response = s3_client.get_object(
+            Bucket=CALENDAR_BUCKET,
+            Key=key,
+        )
+        file_bytes = response["Body"].read()
+        log.info("File %s downloaded successfully.", key)
+        return file_bytes
+    except Exception as e:
+        log.error(f"Download failed: {e}")
+        raise e
+
+
 async def run_calendar_updater(settings: Settings, args: Input, page: Page):
     await login(settings, page)
-    calendar = await create_calendar(page)
-    await upload_calendar_to_s3(calendar)
+    previous_reservations = json.loads((await load_bytes_from_s3(RESERVATIONS_JSON_OBJECT)).decode("utf-8"))
+    future_reservations = await get_future_reservations(page)
+    reservations = await combine_reservations(previous_reservations, future_reservations)
+    json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
+    await upload_bytes_to_s3(RESERVATIONS_JSON_OBJECT, json_bytes, content_type="application/json")
+    calendar = await create_calendar(reservations=reservations)
+    await upload_bytes_to_s3(CALENDAR_OBJECT, calendar.to_ical(), content_type="text/calendar")
 
 
 async def main() -> None:
