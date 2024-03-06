@@ -13,6 +13,7 @@ import logging
 from itertools import zip_longest
 from datetime import datetime, timedelta
 from multiprocessing import Value
+import uuid
 
 # Apify SDK - toolkit for building Apify Actors, read more at https://docs.apify.com/sdk/python
 from apify import Actor
@@ -206,7 +207,7 @@ async def get_future_reservations(page: Page) -> list[dict]:
     return reservations
 
 
-async def create_calendar(reservations: list[dict]):
+async def create_calendar(reservations: list[dict], placeholder_weeks: int = 0):
     # Create a calendar
     cal = Calendar()
 
@@ -217,23 +218,23 @@ async def create_calendar(reservations: list[dict]):
 
     # Create a VTIMEZONE component for Europe/Amsterdam
     tz = Timezone()
-    tz.add('tzid', 'Europe/Amsterdam')
-    tz.add('x-lic-location', 'Europe/Amsterdam')
+    tz.add("tzid", "Europe/Amsterdam")
+    tz.add("x-lic-location", "Europe/Amsterdam")
 
     # Standard Time Component (assuming standard time here, adjust as necessary)
     std = TimezoneStandard()
-    std.add('dtstart', datetime(1970, 10, 25, 3, 0, 0))
-    std.add('tzoffsetfrom', timedelta(hours=2))
-    std.add('tzoffsetto', timedelta(hours=1))
-    std.add('tzname', 'CET')
+    std.add("dtstart", datetime(1970, 10, 25, 3, 0, 0))
+    std.add("tzoffsetfrom", timedelta(hours=2))
+    std.add("tzoffsetto", timedelta(hours=1))
+    std.add("tzname", "CET")
     tz.add_component(std)
 
     # Daylight Saving Time Component (if applicable, adjust as necessary)
     dst = TimezoneDaylight()
-    dst.add('dtstart', datetime(1970, 3, 29, 2, 0, 0))
-    dst.add('tzoffsetfrom', timedelta(hours=1))
-    dst.add('tzoffsetto', timedelta(hours=2))
-    dst.add('tzname', 'CEST')
+    dst.add("dtstart", datetime(1970, 3, 29, 2, 0, 0))
+    dst.add("tzoffsetfrom", timedelta(hours=1))
+    dst.add("tzoffsetto", timedelta(hours=2))
+    dst.add("tzname", "CEST")
     tz.add_component(dst)
 
     # Add the VTIMEZONE component to your calendar before adding events
@@ -248,11 +249,10 @@ async def create_calendar(reservations: list[dict]):
         date_str = reservation["datum"] + " " + reservation["begintijd"]
         start_datetime = amsterdam_tz.localize(datetime.strptime(date_str, "%d-%m-%Y %H:%M"))
         # Assuming the duration of each reservation is 1 hour
-        end_datetime = start_datetime + timedelta(hours=1)
+        end_datetime = start_datetime + timedelta(minutes=45)
 
         # Format summary
-        squash_emoji = "\U0001F3F8"
-        summary = f"{squash_emoji} {reservation['baan']} {reservation['begintijd']}"
+        summary = f"🏸 {reservation['baan']}"
 
         # Set event properties
         event.add("summary", summary)
@@ -271,8 +271,56 @@ async def create_calendar(reservations: list[dict]):
 
         # Add the event to the calendar
         cal.add_component(event)
+        log.info("Added reservation for %s to calendar", start_datetime.strftime("%Y-%m-%d %H:%M"))
+
+    if placeholder_weeks > 0:
+        # We will put place holders on the mondays and thursdays starting at the first monday or thursday after the last reservation
+        last_reservation = max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in reservations)
+        for placeholder in generate_placeholders(last_reservation, placeholder_weeks):
+            placeholder = amsterdam_tz.localize(placeholder)
+
+            event = Event()
+            event.add("summary", "🏸 Placeholder")
+            event.add("dtstart", placeholder)
+            event.add("dtend", placeholder + timedelta(minutes=45))
+            event.add("location", vText("Squash Utrecht"))
+
+            uid = f"squash-placeholder-{uuid.uuid4()}@example.com"
+
+            event.add("uid", uid)
+            event.add("dtstamp", datetime.now())
+
+            cal.add_component(event)
+
+            log.info("Added placeholder for %s to calendar", placeholder.strftime("%Y-%m-%d"))
 
     return cal
+
+
+def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[datetime]:
+    # Generate mondays and thursdays
+    weekday = start.weekday()
+
+    if start.weekday() < 3:
+        next_thursday = start + timedelta(days=(3 - weekday))
+        placeholder_days_in_week = [
+            datetime(next_thursday.year, next_thursday.month, next_thursday.day, 20, 30),
+            datetime(next_thursday.year, next_thursday.month, next_thursday.day, 20, 30) + timedelta(days=4),
+        ]
+    else:
+        next_monday = start + timedelta(days=(7 - weekday))
+        placeholder_days_in_week = [
+            datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30),
+            datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30) + timedelta(days=3),
+        ]
+
+    days = []
+
+    for i in range(placeholder_weeks):
+        for day in placeholder_days_in_week:
+            days.append(day + timedelta(weeks=i))
+
+    return days
 
 
 async def combine_with_old_reservations(reservations_key, future_reservations, player: str = None):
@@ -336,7 +384,7 @@ async def run_calendar_updater(settings: Settings, args: Input, page: Page):
     await login(settings, page)
     future_reservations = await get_future_reservations(page)
 
-    for player in (None, "vera"):
+    for player, placeholder_weeks in ((None, 8), ("jeroen", 8), ("vera", 8)):
         calendar_key = "calendar/reservations.ics" if player is None else f"calendar/reservations-{player}.ics"
         reservations_key = "calendar/reservations.json" if player is None else f"calendar/reservations-{player}.json"
 
@@ -345,7 +393,7 @@ async def run_calendar_updater(settings: Settings, args: Input, page: Page):
         json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
         await upload_bytes_to_s3(reservations_key, json_bytes, content_type="application/json")
 
-        calendar = await create_calendar(reservations=reservations)
+        calendar = await create_calendar(reservations=reservations, placeholder_weeks=placeholder_weeks)
         await upload_bytes_to_s3(calendar_key, calendar.to_ical(), content_type="text/calendar")
 
 
