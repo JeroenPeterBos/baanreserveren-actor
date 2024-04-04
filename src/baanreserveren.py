@@ -207,7 +207,7 @@ async def get_future_reservations(page: Page) -> list[dict]:
     return reservations
 
 
-async def create_calendar(reservations: list[dict], placeholder_weeks: int = 0):
+async def create_calendar(reservations: list[dict]):
     # Create a calendar
     cal = Calendar()
 
@@ -252,7 +252,7 @@ async def create_calendar(reservations: list[dict], placeholder_weeks: int = 0):
         end_datetime = start_datetime + timedelta(minutes=45)
 
         # Format summary
-        summary = f"🏸 {reservation['baan']}"
+        summary = f"⚫️🏸 {reservation['baan']}"
 
         # Set event properties
         event.add("summary", summary)
@@ -273,31 +273,10 @@ async def create_calendar(reservations: list[dict], placeholder_weeks: int = 0):
         cal.add_component(event)
         log.info("Added reservation for %s to calendar", start_datetime.strftime("%Y-%m-%d %H:%M"))
 
-    if placeholder_weeks > 0:
-        # We will put place holders on the mondays and thursdays starting at the first monday or thursday after the last reservation
-        last_reservation = max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in reservations)
-        for placeholder in generate_placeholders(last_reservation, placeholder_weeks):
-            placeholder = amsterdam_tz.localize(placeholder)
-
-            event = Event()
-            event.add("summary", "🏸 Placeholder")
-            event.add("dtstart", placeholder)
-            event.add("dtend", placeholder + timedelta(minutes=45))
-            event.add("location", vText("Squash Utrecht"))
-
-            uid = f"squash-placeholder-{uuid.uuid4()}@example.com"
-
-            event.add("uid", uid)
-            event.add("dtstamp", datetime.now())
-
-            cal.add_component(event)
-
-            log.info("Added placeholder for %s to calendar", placeholder.strftime("%Y-%m-%d"))
-
     return cal
 
 
-def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[datetime]:
+def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[dict]:
     # Generate mondays and thursdays
     weekday = start.weekday()
 
@@ -314,13 +293,21 @@ def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[datet
             datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30) + timedelta(days=3),
         ]
 
-    days = []
+    placeholders = []
 
     for i in range(placeholder_weeks):
         for day in placeholder_days_in_week:
-            days.append(day + timedelta(weeks=i))
+            placeholders.append(
+                {
+                    "datum": (day + timedelta(weeks=i)).strftime("%d-%m-%Y"),
+                    "weekdag": day.strftime("%A"),
+                    "begintijd": "20:30",
+                    "baan": "Placeholder",
+                    "spelers": ["Jeroen Bos", "Vera Sweere"],
+                }
+            )
 
-    return days
+    return placeholders
 
 
 async def combine_with_old_reservations(reservations_key, future_reservations, player: str = None):
@@ -387,13 +374,25 @@ async def run_calendar_updater(settings: Settings, args: Input, page: Page):
     for player, placeholder_weeks in ((None, 8), ("jeroen", 8), ("vera", 8)):
         calendar_key = "calendar/reservations.ics" if player is None else f"calendar/reservations-{player}.ics"
         reservations_key = "calendar/reservations.json" if player is None else f"calendar/reservations-{player}.json"
+        reservations_placeholders_key = (
+            "calendar/reservations_placeholders.json"
+            if player is None
+            else f"calendar/reservations_placeholders-{player}.json"
+        )
 
+        placeholders = generate_placeholders(
+            start=max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in future_reservations),
+            placeholder_weeks=placeholder_weeks,
+        )
         reservations = await combine_with_old_reservations(reservations_key, future_reservations, player=player)
 
         json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
         await upload_bytes_to_s3(reservations_key, json_bytes, content_type="application/json")
 
-        calendar = await create_calendar(reservations=reservations, placeholder_weeks=placeholder_weeks)
+        json_bytes = str.encode(json.dumps(reservations + placeholders, indent=4), "utf-8")
+        await upload_bytes_to_s3(reservations_placeholders_key, json_bytes, content_type="application/json")
+
+        calendar = await create_calendar(reservations=reservations + placeholders)
         await upload_bytes_to_s3(calendar_key, calendar.to_ical(), content_type="text/calendar")
 
 
