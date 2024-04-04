@@ -357,12 +357,18 @@ async def combine_with_old_reservations(reservations_key, future_reservations, p
 async def upload_bytes_to_s3(key, bytes, content_type):
     s3_client = boto3.client("s3")
     try:
-        s3_client.put_object(
-            Bucket=CALENDAR_BUCKET,
-            Key=key,
-            Body=bytes,
-            ContentType=content_type,
-        )
+
+        def _upload():
+            s3_client.put_object(
+                Bucket=CALENDAR_BUCKET,
+                Key=key,
+                Body=bytes,
+                ContentType=content_type,
+            )
+
+        loop = asyncio.get_running_loop()
+        loop.run_in_executor(None, _upload)
+
         log.info("File %s of type %s uploaded successfully.", key, content_type)
     except Exception as e:
         log.error(f"Upload failed: {e}")
