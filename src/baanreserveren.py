@@ -17,7 +17,7 @@ import uuid
 
 # Apify SDK - toolkit for building Apify Actors, read more at https://docs.apify.com/sdk/python
 from apify import Actor
-from icalendar import Calendar, Event, Timezone, TimezoneDaylight, TimezoneStandard, vText
+from icalendar import Calendar, Event, Timezone, TimezoneDaylight, TimezoneStandard, vCalAddress, vText
 
 import boto3
 
@@ -41,6 +41,7 @@ DEVICE = "Desktop Chrome"
 OPPONENTS = {
     "vera": "1073483",
     "koen": "1340920",
+    "jeroen": "1148695",
 }
 
 
@@ -207,7 +208,7 @@ async def get_future_reservations(page: Page) -> list[dict]:
     return reservations
 
 
-async def create_calendar(reservations: list[dict]):
+async def create_calendar(reservations: list[dict], player: str):
     # Create a calendar
     cal = Calendar()
 
@@ -252,15 +253,23 @@ async def create_calendar(reservations: list[dict]):
         end_datetime = start_datetime + timedelta(minutes=45)
 
         # Format summary
-        summary = f"⚫️🏸 {reservation['baan']}"
+        summary = f"{reservation['baan']} 🏆⚫️"
 
         # Set event properties
         event.add("summary", summary)
         event.add("dtstart", start_datetime)
         event.add("dtend", end_datetime)
-        event.add("location", vText("Squash Utrecht"))
+        event.add("location", "Squash Utrecht, Taagdreef 130, 3561 VL Utrecht")
+        event.add("url", f"https://squtrecht.baanreserveren.nl/user/{OPPONENTS[player]}/future")
+
         if "spelers" in reservation:
             event.add("description", "Spelers: " + ", ".join(reservation["spelers"]))
+            for speler in reservation["spelers"]:
+                # Adding attendees
+                attendee = vCalAddress("MAILTO:jeroenbosleusden@mail.com")
+                attendee.params["cn"] = vText(speler)
+                attendee.params["ROLE"] = vText("REQ-PARTICIPANT")
+                event.add("attendee", attendee, encode=0)
 
         # Generate a UID for each event, for example using the start datetime and court number
         uid = f"squash-{reservation['datum'].replace('-', '')}-{reservation['begintijd'].replace(':', '')}-{reservation['baan'].replace(' ', '')}@example.com"
@@ -269,9 +278,17 @@ async def create_calendar(reservations: list[dict]):
         # Add the current timestamp as dtstamp
         event.add("dtstamp", datetime.now())
 
+        # Setting status and transparency
+        event.add("status", "CONFIRMED")
+        event.add("transp", "OPAQUE")
+
+        # Increment number to invalidate old values
+        event.add("sequence", int(datetime.now().strftime("%Y%m%d")))
+
         # Add the event to the calendar
         cal.add_component(event)
-        log.info("Added reservation for %s to calendar", start_datetime.strftime("%Y-%m-%d %H:%M"))
+        event_type = "placeholder" if "placeholder" in reservation["baan"].lower() else "reservation"
+        log.info("Added %s for %s to calendar", event_type, start_datetime.strftime("%Y-%m-%d %H:%M"))
 
     return cal
 
@@ -302,7 +319,7 @@ def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[dict]
                     "datum": (day + timedelta(weeks=i)).strftime("%d-%m-%Y"),
                     "weekdag": day.strftime("%A"),
                     "begintijd": "20:30",
-                    "baan": "Placeholder",
+                    "baan": "[Placeholder]",
                     "spelers": ["Jeroen Bos", "Vera Sweere"],
                 }
             )
@@ -367,33 +384,57 @@ async def load_bytes_from_s3(key):
         raise e
 
 
+async def generate_upload_files(future_reservations: list[dict], player: str, placeholder_weeks: int):
+    calendar_key = "calendar/reservations.ics" if player is None else f"calendar/reservations-{player}.ics"
+    reservations_key = "calendar/reservations.json" if player is None else f"calendar/reservations-{player}.json"
+    reservations_placeholders_key = (
+        "calendar/reservations_placeholders.json"
+        if player is None
+        else f"calendar/reservations_placeholders-{player}.json"
+    )
+
+    placeholders = generate_placeholders(
+        start=max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in future_reservations),
+        placeholder_weeks=placeholder_weeks,
+    )
+    reservations = await combine_with_old_reservations(reservations_key, future_reservations, player=player)
+
+    json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
+    upload_reservations = upload_bytes_to_s3(reservations_key, json_bytes, content_type="application/json")
+
+    json_bytes = str.encode(json.dumps(reservations + placeholders, indent=4), "utf-8")
+    upload_reservations_placeholders = upload_bytes_to_s3(
+        reservations_placeholders_key, json_bytes, content_type="application/json"
+    )
+
+    calendar = await create_calendar(reservations=reservations + placeholders, player=player or "jeroen")
+    upload_calendar = upload_bytes_to_s3(calendar_key, calendar.to_ical(), content_type="text/calendar")
+
+    await asyncio.gather(
+        upload_reservations,
+        upload_reservations_placeholders,
+        upload_calendar,
+    )
+
+
 async def run_calendar_updater(settings: Settings, args: Input, page: Page):
     await login(settings, page)
     future_reservations = await get_future_reservations(page)
 
-    for player, placeholder_weeks in ((None, 8), ("jeroen", 8), ("vera", 8)):
-        calendar_key = "calendar/reservations.ics" if player is None else f"calendar/reservations-{player}.ics"
-        reservations_key = "calendar/reservations.json" if player is None else f"calendar/reservations-{player}.json"
-        reservations_placeholders_key = (
-            "calendar/reservations_placeholders.json"
-            if player is None
-            else f"calendar/reservations_placeholders-{player}.json"
-        )
-
-        placeholders = generate_placeholders(
-            start=max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in future_reservations),
-            placeholder_weeks=placeholder_weeks,
-        )
-        reservations = await combine_with_old_reservations(reservations_key, future_reservations, player=player)
-
-        json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
-        await upload_bytes_to_s3(reservations_key, json_bytes, content_type="application/json")
-
-        json_bytes = str.encode(json.dumps(reservations + placeholders, indent=4), "utf-8")
-        await upload_bytes_to_s3(reservations_placeholders_key, json_bytes, content_type="application/json")
-
-        calendar = await create_calendar(reservations=reservations + placeholders)
-        await upload_bytes_to_s3(calendar_key, calendar.to_ical(), content_type="text/calendar")
+    await asyncio.gather(
+        *[
+            generate_upload_files(
+                future_reservations=future_reservations,
+                player=player,
+                placeholder_weeks=placeholder_weeks,
+            )
+            for player, placeholder_weeks in (
+                (None, 8),
+                ("jeroen", 8),
+                ("vera", 8),
+            )
+        ]
+    )
 
 
 async def main() -> None:
