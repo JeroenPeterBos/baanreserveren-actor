@@ -399,8 +399,9 @@ async def generate_upload_files(future_reservations: list[dict], player: str, pl
         else f"calendar/reservations_placeholders-{player}.json"
     )
 
+    latest_reservation = max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in future_reservations)
     placeholders = generate_placeholders(
-        start=max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in future_reservations),
+        start=max(latest_reservation, datetime.now() + timedelta(days=7)),
         placeholder_weeks=placeholder_weeks,
     )
     reservations = await combine_with_old_reservations(reservations_key, future_reservations, player=player)
