@@ -297,17 +297,17 @@ def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[dict]
     # Generate mondays and thursdays
     weekday = start.weekday()
 
-    if start.weekday() < 3:
-        next_thursday = start + timedelta(days=(3 - weekday))
+    if start.weekday() < 2:
+        next_wednesday = start + timedelta(days=(2 - weekday))
         placeholder_days_in_week = [
-            datetime(next_thursday.year, next_thursday.month, next_thursday.day, 20, 30),
-            datetime(next_thursday.year, next_thursday.month, next_thursday.day, 20, 30) + timedelta(days=4),
+            datetime(next_wednesday.year, next_wednesday.month, next_wednesday.day, 20, 30),
+            datetime(next_wednesday.year, next_wednesday.month, next_wednesday.day, 20, 30) + timedelta(days=5),
         ]
     else:
         next_monday = start + timedelta(days=(7 - weekday))
         placeholder_days_in_week = [
             datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30),
-            datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30) + timedelta(days=3),
+            datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30) + timedelta(days=2),
         ]
 
     placeholders = []
@@ -319,7 +319,7 @@ def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[dict]
                     "datum": (day + timedelta(weeks=i)).strftime("%d-%m-%Y"),
                     "weekdag": day.strftime("%A"),
                     "begintijd": "20:30",
-                    "baan": "[Placeholder]",
+                    "baan": "🚧 Placeholder",
                     "spelers": ["Jeroen Bos", "Vera Sweere"],
                 }
             )
