@@ -125,7 +125,11 @@ async def select_slot(settings: Settings, args: Input, page: Page):
             log.info("No slots available at %s", time)
             continue
 
-        for slot in slots[::-1]:
+        if args.leden_only:
+            # For members only we want the hall in the back to have preference
+            slots = slots[::-1]
+
+        for slot in slots:
             await slot.click()
 
             row = page.locator('td.tblTitle:has-text("Baan")').locator("..")
