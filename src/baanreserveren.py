@@ -39,7 +39,7 @@ URL_RESERVATIONS = "https://squtrecht.baanreserveren.nl/user/future"
 CALENDAR_BUCKET = "apify-squash-utrecht"
 DEVICE = "Desktop Chrome"
 OPPONENTS = {
-    "vera": "1073483",
+    "vera": "1409256",
     "koen": "1340920",
     "jeroen": "1148695",
 }
