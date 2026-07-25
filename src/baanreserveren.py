@@ -187,9 +187,16 @@ async def get_future_reservations(page: Page) -> list[dict]:
     headers = [
         to_snake_case(header)
         for header in await page.locator(
-            "//th[contains(text(), 'Reserveringen')]/ancestor::tbody/tr[@class='tblTitle'][1]/td"
+            "//th[contains(text(), 'Reserveringen')]/ancestor::tbody/tr[@class='tblTitle'][1]/*[self::td or self::th]"
         ).all_inner_texts()
     ]
+    log.info("Parsed reservation columns: %s", headers)
+    for required in ("datum", "begintijd", "baan"):
+        if required not in headers:
+            raise RuntimeError(
+                f"Expected column '{required}' not found in reservations table. "
+                f"BaanReserveren likely changed their layout. Parsed columns: {headers}"
+            )
 
     reservations = []
     for reservation_index in range(await reservations_locator.count()):
