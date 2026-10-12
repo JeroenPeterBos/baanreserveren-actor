@@ -5,7 +5,8 @@
 	"description": "Extract the order screenshots from the Helloprint order page",
 	"version": "0.1",
 	"meta": {
-		"templateId": "python-start"
+		"templateId": "python-start",
+		"generatedBy": "Cursor with Grok 4.7"
 	},
 	"input": "./input_schema.json",
 	"dockerfile": "./Dockerfile"

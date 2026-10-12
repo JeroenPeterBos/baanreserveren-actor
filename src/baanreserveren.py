@@ -10,6 +10,7 @@ https://docs.apify.com/sdk/python
 import asyncio
 import json
 import logging
+import re
 from itertools import zip_longest
 from datetime import datetime, timedelta
 from multiprocessing import Value
@@ -22,12 +23,13 @@ from icalendar import Calendar, Event, Timezone, TimezoneDaylight, TimezoneStand
 import boto3
 
 # We use playwright for scraping, read more at https://playwright.dev/python/docs/api/class-playwright
-from playwright.async_api import Page, async_playwright
+from playwright.async_api import Page, TimeoutError as PlaywrightTimeoutError, async_playwright
 import pytz
 
 # We use pydantic for parsing te input and loading the environment variables, read more at https://pydantic-docs.helpmanual.io/
 
 from src.models import Input, Settings
+from src.reservations import extract_player_names, parse_reservation_page
 from src.utils import to_snake_case
 
 
@@ -178,45 +180,140 @@ async def run_reserver(settings: Settings, args: Input, page: Page):
 
 async def get_future_reservations(page: Page) -> list[dict]:
     await page.goto(URL_RESERVATIONS)
+    await _wait_for_reservations_markup(page)
 
-    reservations_locator = page.locator(
-        "//th[contains(text(), 'Reserveringen')]/ancestor::tbody/tr[@class='odd' or @class='even']"
+    # Parse the browser DOM. page.content() is the live document, so a thead
+    # title row and body rows without odd/even classes are both visible here.
+    parsed = parse_reservation_page(await page.content(), page_url=page.url)
+    columns = [to_snake_case(header) for header in parsed.columns if to_snake_case(header)]
+    log.info("Found %s reservations", len(parsed.reservations))
+    log.info("Parsed reservation columns: %s", columns)
+    if parsed.title:
+        log.info("Reservations table title: %s", parsed.title)
+
+    for reservation, match in zip(parsed.reservations, parsed.matches):
+        reservation["spelers"] = await _read_reservation_players(page, match)
+
+    return parsed.reservations
+
+
+async def _wait_for_reservations_markup(page: Page) -> None:
+    table_selector = "table tr.tblTitle, table thead th"
+    if await page.locator("#login-form").count() and await page.locator(table_selector).count() == 0:
+        return
+    try:
+        await page.wait_for_selector(table_selector, timeout=10000)
+    except PlaywrightTimeoutError:
+        log.info("Reservations table header did not appear on %s", page.url)
+
+
+async def _read_reservation_players(page: Page, match: dict) -> list[str]:
+    label = f"{match['datum']} {match['begintijd']} {match['baan']}"
+    row = await _find_reservation_row(page, match)
+    if row is None:
+        raise RuntimeError(
+            f"Parsed reservation {label} is not on the reservations page. "
+            "BaanReserveren likely changed their layout."
+        )
+
+    link = await _reservation_detail_link(row)
+    if link is None:
+        raise RuntimeError(
+            f"Reservation {label} has no detail link to read players from. "
+            "BaanReserveren likely changed their layout."
+        )
+
+    await link.click()
+    try:
+        await page.get_by_text(re.compile(r"Speler\s*1", re.I)).first.wait_for(state="visible", timeout=10000)
+    except PlaywrightTimeoutError as exc:
+        raise RuntimeError(
+            f"Opened reservation {label} but did not find 'Speler 1'. "
+            "BaanReserveren likely changed the reservation detail layout."
+        ) from exc
+
+    lightbox = page.locator("#overlays .lightbox")
+    detail_html = await lightbox.last.inner_html() if await lightbox.count() else await page.content()
+    names = extract_player_names(detail_html)
+    if not names:
+        raise RuntimeError(
+            f"Opened reservation {label} but could not read player names. "
+            "BaanReserveren likely changed the reservation detail layout."
+        )
+
+    await row.evaluate("el => el.setAttribute('data-reservation-read', '1')")
+    await _close_reservation_detail(page)
+    return names
+
+
+async def _find_reservation_row(page: Page, match: dict):
+    """Find the overview row by exact cell text, so Court 1 does not match Court 10."""
+    handle = await page.evaluate_handle(
+        """(target) => {
+            const text = (el) => (el.textContent || '').replace(/\\s+/g, ' ').trim();
+            const visible = (el) => {
+                for (let node = el; node && node.nodeType === 1; node = node.parentElement) {
+                    const style = getComputedStyle(node);
+                    if (style.display === 'none' || style.visibility === 'hidden') return false;
+                }
+                return true;
+            };
+            for (const row of document.querySelectorAll('tr:not([data-reservation-read])')) {
+                if (!visible(row)) continue;
+                const cells = [...row.children]
+                    .filter((el) => el.tagName === 'TD' || el.tagName === 'TH')
+                    .map(text);
+                if (
+                    cells.includes(target.datum)
+                    && cells.includes(target.begintijd)
+                    && cells.includes(target.baan)
+                ) {
+                    return row;
+                }
+            }
+            return null;
+        }""",
+        match,
     )
+    element = handle.as_element()
+    if element is None:
+        await handle.dispose()
+    return element
 
-    log.info("Found %s reservations", await reservations_locator.count())
-    headers = [
-        to_snake_case(header)
-        for header in await page.locator(
-            "//th[contains(text(), 'Reserveringen')]/ancestor::tbody/tr[@class='tblTitle'][1]/*[self::td or self::th]"
-        ).all_inner_texts()
-    ]
-    log.info("Parsed reservation columns: %s", headers)
-    for required in ("datum", "begintijd", "baan"):
-        if required not in headers:
-            raise RuntimeError(
-                f"Expected column '{required}' not found in reservations table. "
-                f"BaanReserveren likely changed their layout. Parsed columns: {headers}"
-            )
 
-    reservations = []
-    for reservation_index in range(await reservations_locator.count()):
-        reservation = {
-            header: value.strip()
-            for header, value in zip(
-                headers,
-                await reservations_locator.nth(reservation_index).locator("td").all_inner_texts(),
-            )
-        }
+async def _reservation_detail_link(row):
+    """Prefer the details link over an annuleren/cancel control in the same row."""
+    links = await row.query_selector_all("a")
+    for link in links:
+        href = (await link.get_attribute("href") or "").lower()
+        text = (await link.inner_text() or "").lower()
+        if "cancel" in href or "annul" in href or "annul" in text:
+            continue
+        return link
+    return links[0] if links else None
 
-        await reservations_locator.nth(reservation_index).locator("a").click()
-        await page.wait_for_selector("//*[contains(text(), 'Speler 1')]")
 
-        reservation["spelers"] = await page.locator("//div[@class='res-info-player-name']").all_inner_texts()
-        reservations.append(reservation)
+async def _close_reservation_detail(page: Page) -> None:
+    for selector in (
+        "input[value='Terug']",
+        "button:has-text('Terug')",
+        "a:has-text('Terug')",
+        "a.top-close",
+        "a[tooltip='Sluiten']",
+    ):
+        control = page.locator(selector)
+        if await control.count():
+            await control.first.click()
+            break
+    else:
+        await page.keyboard.press("Escape")
 
-        await page.click("//input[@value='Terug']")
-
-    return reservations
+    lightbox = page.locator("#overlays .lightbox")
+    if await lightbox.count():
+        try:
+            await lightbox.first.wait_for(state="hidden", timeout=5000)
+        except PlaywrightTimeoutError:
+            log.warning("Reservation detail overlay stayed open")
 
 
 async def create_calendar(reservations: list[dict], player: str):
