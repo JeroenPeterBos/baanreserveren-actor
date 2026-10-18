@@ -29,6 +29,7 @@ import pytz
 # We use pydantic for parsing te input and loading the environment variables, read more at https://pydantic-docs.helpmanual.io/
 
 from src.models import Input, Settings
+from src.placeholders import generate_placeholders
 from src.reservations import extract_player_names, parse_reservation_page
 from src.utils import to_snake_case
 
@@ -401,40 +402,6 @@ async def create_calendar(reservations: list[dict], player: str):
     return cal
 
 
-def generate_placeholders(start: datetime, placeholder_weeks: int) -> list[dict]:
-    # Generate mondays and thursdays
-    weekday = start.weekday()
-
-    if start.weekday() < 2:
-        next_wednesday = start + timedelta(days=(2 - weekday))
-        placeholder_days_in_week = [
-            datetime(next_wednesday.year, next_wednesday.month, next_wednesday.day, 20, 30),
-            datetime(next_wednesday.year, next_wednesday.month, next_wednesday.day, 20, 30) + timedelta(days=5),
-        ]
-    else:
-        next_monday = start + timedelta(days=(7 - weekday))
-        placeholder_days_in_week = [
-            datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30),
-            datetime(next_monday.year, next_monday.month, next_monday.day, 20, 30) + timedelta(days=2),
-        ]
-
-    placeholders = []
-
-    for i in range(placeholder_weeks):
-        for day in placeholder_days_in_week:
-            placeholders.append(
-                {
-                    "datum": (day + timedelta(weeks=i)).strftime("%d-%m-%Y"),
-                    "weekdag": day.strftime("%A"),
-                    "begintijd": "20:30",
-                    "baan": "🚧 Placeholder",
-                    "spelers": ["Jeroen Bos", "Vera Sweere"],
-                }
-            )
-
-    return placeholders
-
-
 async def combine_with_old_reservations(reservations_key, future_reservations, player: str = None):
     previous_reservations = json.loads((await load_bytes_from_s3(reservations_key)).decode("utf-8"))
     today = datetime.now().date()
@@ -498,7 +465,13 @@ async def load_bytes_from_s3(key):
         raise e
 
 
-async def generate_upload_files(future_reservations: list[dict], player: str, placeholder_weeks: int):
+async def generate_upload_files(
+    future_reservations: list[dict],
+    player: str,
+    placeholder_weeks: int,
+    placeholder_weekdays: list[str] | None = None,
+    placeholder_time: str = "20:30",
+):
     calendar_key = "calendar/reservations.ics" if player is None else f"calendar/reservations-{player}.ics"
     reservations_key = "calendar/reservations.json" if player is None else f"calendar/reservations-{player}.json"
     reservations_placeholders_key = (
@@ -511,6 +484,8 @@ async def generate_upload_files(future_reservations: list[dict], player: str, pl
     placeholders = generate_placeholders(
         start=max(latest_reservation, datetime.now() + timedelta(days=7)),
         placeholder_weeks=placeholder_weeks,
+        weekdays=placeholder_weekdays,
+        placeholder_time=placeholder_time,
     )
     reservations = await combine_with_old_reservations(reservations_key, future_reservations, player=player)
 
@@ -542,6 +517,8 @@ async def run_calendar_updater(settings: Settings, args: Input, page: Page):
                 future_reservations=future_reservations,
                 player=player,
                 placeholder_weeks=placeholder_weeks,
+                placeholder_weekdays=args.placeholder_weekdays,
+                placeholder_time=args.placeholder_time,
             )
             for player, placeholder_weeks in (
                 (None, 8),
