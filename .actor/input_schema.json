@@ -4,7 +4,7 @@
     "properties": {
         "update_calendar": {
             "title": "Update Calendar",
-            "description": "Scrape the reservations and update the ical file. If true, the other fields are ignored",
+            "description": "Scrape the reservations and update the ical file. If true, booking fields are ignored. Placeholder weekdays and time still apply.",
             "default": false,
             "type": "boolean"
         },
@@ -85,6 +85,36 @@
                 "type": "string"
             },
             "editor": "stringList"
+        },
+        "placeholder_weekdays": {
+            "title": "Placeholder Weekdays",
+            "description": "Weekdays for placeholder events on evenings that are not booked yet. Lowercase English names. Defaults to Tuesday and Thursday.",
+            "default": [
+                "tuesday",
+                "thursday"
+            ],
+            "type": "array",
+            "items": {
+                "type": "string",
+                "enum": [
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                    "saturday",
+                    "sunday"
+                ]
+            },
+            "editor": "stringList"
+        },
+        "placeholder_time": {
+            "title": "Placeholder Time",
+            "description": "Start time for placeholder events, HH:MM. The event stays 45 minutes.",
+            "default": "20:30",
+            "type": "string",
+            "editor": "textfield",
+            "prefill": "20:30"
         }
     },
     "schemaVersion": 1

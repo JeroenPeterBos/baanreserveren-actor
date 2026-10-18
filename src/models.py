@@ -1,6 +1,15 @@
 from typing import Literal
 from datetime import date
-from pydantic import BaseModel, BaseSettings, Field
+from pydantic import BaseModel, BaseSettings, Field, validator
+
+from src.placeholders import (
+    DEFAULT_PLACEHOLDER_TIME,
+    DEFAULT_PLACEHOLDER_WEEKDAYS,
+    normalize_placeholder_time,
+    normalize_weekdays,
+)
+
+WeekdayName = Literal["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
 
 
 class Settings(BaseSettings):
@@ -13,7 +22,10 @@ class Settings(BaseSettings):
 class Input(BaseModel):
     update_calendar: bool = Field(
         default=False,
-        description="Scrape the reservations and update the ical file. If true, the other fields are ignored",
+        description=(
+            "Scrape the reservations and update the ical file. If true, booking fields are ignored. "
+            "Placeholder weekdays and time still apply."
+        ),
     )
     dry_run: bool = Field(default=True, description="Don't actually place the reservation")
     reservation_date: str = Field(
@@ -35,6 +47,29 @@ class Input(BaseModel):
         default=["20:15", "19:30"],
         description="The times to try to book a slot on the non-leden banen",
     )
+    placeholder_weekdays: list[WeekdayName] = Field(
+        default=DEFAULT_PLACEHOLDER_WEEKDAYS,
+        description=(
+            "Weekdays for placeholder events on evenings that are not booked yet. "
+            "Lowercase English names. Defaults to Tuesday and Thursday."
+        ),
+    )
+    placeholder_time: str = Field(
+        default=DEFAULT_PLACEHOLDER_TIME,
+        description="Start time for placeholder events, HH:MM. The event stays 45 minutes.",
+    )
+
+    @validator("placeholder_weekdays", pre=True)
+    def placeholder_weekdays_are_known(cls, value):
+        if value is None:
+            return DEFAULT_PLACEHOLDER_WEEKDAYS
+        return normalize_weekdays(value)
+
+    @validator("placeholder_time", pre=True)
+    def placeholder_time_is_hhmm(cls, value):
+        if value is None:
+            return DEFAULT_PLACEHOLDER_TIME
+        return normalize_placeholder_time(value)
 
 
 if __name__ == "__main__":
