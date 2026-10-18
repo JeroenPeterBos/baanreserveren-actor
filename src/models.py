@@ -9,9 +9,6 @@ from src.placeholders import (
     normalize_weekdays,
 )
 
-WeekdayName = Literal["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-
-
 class Settings(BaseSettings):
     dry_run: bool = Field(ENV="DRY_RUN", default=True, description="Don't actually place the reservation")
     username: str = Field(env="BR_USERNAME", description="Baanreserveren username")
@@ -47,11 +44,12 @@ class Input(BaseModel):
         default=["20:15", "19:30"],
         description="The times to try to book a slot on the non-leden banen",
     )
-    placeholder_weekdays: list[WeekdayName] = Field(
+    placeholder_weekdays: list[str] = Field(
         default=DEFAULT_PLACEHOLDER_WEEKDAYS,
         description=(
             "Weekdays for placeholder events on evenings that are not booked yet. "
-            "Lowercase English names. Defaults to Tuesday and Thursday."
+            "Use monday, tuesday, wednesday, thursday, friday, saturday, or sunday. "
+            "Defaults to tuesday and thursday."
         ),
     )
     placeholder_time: str = Field(
@@ -90,8 +88,12 @@ if __name__ == "__main__":
                 field["prefill"] = field["default"]
 
         if field["type"] == "array":
-            if field["items"]["type"] == "string":
+            if field.get("items", {}).get("type") == "string":
                 field["editor"] = "stringList"
+            # stringList rejects items.enum. Weekday names are checked in code.
+            if field.get("editor") == "stringList" and isinstance(field.get("items"), dict):
+                field["items"].pop("enum", None)
+                field["items"].pop("enumTitles", None)
 
     json_schema["title"] = "Baanreserveren Actor"
     json_schema["schemaVersion"] = 1

@@ -88,24 +88,12 @@
         },
         "placeholder_weekdays": {
             "title": "Placeholder Weekdays",
-            "description": "Weekdays for placeholder events on evenings that are not booked yet. Lowercase English names. Defaults to Tuesday and Thursday.",
+            "description": "Weekdays for placeholder events on evenings that are not booked yet. Use monday, tuesday, wednesday, thursday, friday, saturday, or sunday. Defaults to tuesday and thursday.",
             "default": [
                 "tuesday",
                 "thursday"
             ],
             "type": "array",
-            "items": {
-                "type": "string",
-                "enum": [
-                    "monday",
-                    "tuesday",
-                    "wednesday",
-                    "thursday",
-                    "friday",
-                    "saturday",
-                    "sunday"
-                ]
-            },
             "editor": "stringList"
         },
         "placeholder_time": {

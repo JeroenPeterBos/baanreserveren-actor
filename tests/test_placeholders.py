@@ -128,7 +128,7 @@ def test_input_schema_defaults_to_tuesday_thursday_at_2030():
     placeholder_time = schema["properties"]["placeholder_time"]
 
     assert weekdays["default"] == ["tuesday", "thursday"]
-    assert weekdays["items"]["enum"][0] == "monday"
-    assert "thursday" in weekdays["items"]["enum"]
+    assert weekdays["editor"] == "stringList"
+    assert "items" not in weekdays
     assert placeholder_time["default"] == "20:30"
     assert "45 minutes" in placeholder_time["description"]
