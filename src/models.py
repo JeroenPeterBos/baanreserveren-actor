@@ -11,6 +11,7 @@ from src.booking_window import (
     coerce_optional_int,
     normalize_clock,
 )
+from src.calendar_sync import normalize_removal_stamp
 from src.placeholders import (
     DEFAULT_PLACEHOLDER_TIME,
     DEFAULT_PLACEHOLDER_WEEKDAYS,
@@ -65,6 +66,13 @@ class Input(BaseModel):
     placeholder_time: str = Field(
         default=DEFAULT_PLACEHOLDER_TIME,
         description="Start time for placeholder events, HH:MM. The event stays 45 minutes.",
+    )
+    remove_reservations: list[str] = Field(
+        default=[],
+        description=(
+            "Calendar sync only. Drop these entries from the stored history before the ICS files "
+            "are written. Format: DD-MM-YYYY HH:MM, for example 19-10-2026 21:15. Empty by default."
+        ),
     )
     wait_until: Optional[str] = Field(
         default=None,
@@ -128,6 +136,14 @@ class Input(BaseModel):
             minimum=MIN_TIMEOUT_SECONDS,
             maximum=MAX_TIMEOUT_SECONDS,
         )
+
+    @validator("remove_reservations", pre=True)
+    def remove_reservations_are_stamps(cls, value):
+        if value is None:
+            return []
+        if not isinstance(value, list):
+            raise ValueError("remove_reservations must be a list of DD-MM-YYYY HH:MM strings")
+        return [normalize_removal_stamp(item) for item in value]
 
     @validator("placeholder_weekdays", pre=True)
     def placeholder_weekdays_are_known(cls, value):

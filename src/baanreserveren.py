@@ -39,6 +39,7 @@ from src.booking_window import (
     resolve_booking_date,
     seconds_until_opening,
 )
+from src.calendar_sync import combine_reservations, placeholder_anchor
 from src.models import Input, Settings
 from src.placeholders import generate_placeholders
 from src.reservations import extract_player_names, parse_reservation_page
@@ -628,26 +629,26 @@ async def create_calendar(reservations: list[dict], player: str):
     return cal
 
 
-async def combine_with_old_reservations(reservations_key, future_reservations, player: str = None):
+async def combine_with_old_reservations(
+    reservations_key,
+    future_reservations,
+    player: str = None,
+    remove_reservations: list[str] | None = None,
+):
     previous_reservations = json.loads((await load_bytes_from_s3(reservations_key)).decode("utf-8"))
-    today = datetime.now().date()
-    previous_reservations = [
-        reservation
-        for reservation in previous_reservations
-        if datetime.strptime(reservation["datum"], "%d-%m-%Y").date() < today
-    ]
-
-    if player is not None:
-        future_reservations = [
-            reservation
-            for reservation in future_reservations
-            if any(player in p.lower() for p in reservation["spelers"])
-        ]
-
-    reservations = previous_reservations + future_reservations
+    reservations, removed, missing = combine_reservations(
+        previous_reservations,
+        future_reservations,
+        today=datetime.now().date(),
+        player=player,
+        remove=remove_reservations,
+    )
+    if remove_reservations:
+        log.info("Removed %s stored reservations listed in remove_reservations", removed)
+        if missing:
+            log.warning("remove_reservations did not match a stored reservation: %s", ", ".join(missing))
     log.info(
-        "Combined %s previous and %s future reservations with a resulting %s reservations",
-        len(previous_reservations),
+        "Combined stored history with %s scraped reservations into %s reservations",
         len(future_reservations),
         len(reservations),
     )
@@ -697,6 +698,7 @@ async def generate_upload_files(
     placeholder_weeks: int,
     placeholder_weekdays: list[str] | None = None,
     placeholder_time: str = "20:30",
+    remove_reservations: list[str] | None = None,
 ):
     calendar_key = "calendar/reservations.ics" if player is None else f"calendar/reservations-{player}.ics"
     reservations_key = "calendar/reservations.json" if player is None else f"calendar/reservations-{player}.json"
@@ -706,14 +708,21 @@ async def generate_upload_files(
         else f"calendar/reservations_placeholders-{player}.json"
     )
 
-    latest_reservation = max(datetime.strptime(reservation["datum"], "%d-%m-%Y") for reservation in future_reservations)
+    anchor = placeholder_anchor(future_reservations, datetime.now())
+    if not future_reservations:
+        log.info("No upcoming reservations. Placeholders start after %s", anchor.strftime("%Y-%m-%d"))
     placeholders = generate_placeholders(
-        start=max(latest_reservation, datetime.now() + timedelta(days=7)),
+        start=anchor,
         placeholder_weeks=placeholder_weeks,
         weekdays=placeholder_weekdays,
         placeholder_time=placeholder_time,
     )
-    reservations = await combine_with_old_reservations(reservations_key, future_reservations, player=player)
+    reservations = await combine_with_old_reservations(
+        reservations_key,
+        future_reservations,
+        player=player,
+        remove_reservations=remove_reservations,
+    )
 
     json_bytes = str.encode(json.dumps(reservations, indent=4), "utf-8")
     upload_reservations = upload_bytes_to_s3(reservations_key, json_bytes, content_type="application/json")
@@ -745,6 +754,7 @@ async def run_calendar_updater(settings: Settings, args: Input, page: Page):
                 placeholder_weeks=placeholder_weeks,
                 placeholder_weekdays=args.placeholder_weekdays,
                 placeholder_time=args.placeholder_time,
+                remove_reservations=args.remove_reservations,
             )
             for player, placeholder_weeks in (
                 (None, 8),
