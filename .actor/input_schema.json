@@ -86,6 +86,34 @@
             },
             "editor": "stringList"
         },
+        "wait_until": {
+            "title": "Wait Until",
+            "description": "Europe/Amsterdam time (HH:MM or HH:MM:SS) when courts open. Before this time the actor logs in and opens the target date, and does not reload the court matrix. Example: 06:30:00. Leave empty to check as soon as the page is ready.",
+            "type": "string",
+            "editor": "textfield",
+            "pattern": "^$|^([01]\\d|2[0-3]):[0-5]\\d(:[0-5]\\d)?$"
+        },
+        "retry_for_seconds": {
+            "title": "Retry For Seconds",
+            "description": "After wait_until (or immediately, when wait_until is empty), keep reloading and checking for a free slot for this many seconds. Leave empty for a single check. 180 covers the rush after opening.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 900
+        },
+        "retry_interval_seconds": {
+            "title": "Retry Interval Seconds",
+            "description": "Seconds between slot checks while retry_for_seconds is running. Use 2 or 3 so the club site is not hammered. Ignored when retry_for_seconds is empty. Defaults to 2 when polling.",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+        },
+        "timeout_seconds": {
+            "title": "Timeout Seconds",
+            "description": "Overall actor timeout in seconds. Leave empty to keep 180 seconds, extended automatically so the wait until opening plus retry_for_seconds still fits (with two extra minutes for login and booking). The Apify task timeout must be longer than this.",
+            "type": "integer",
+            "minimum": 30,
+            "maximum": 3600
+        },
         "placeholder_weekdays": {
             "title": "Placeholder Weekdays",
             "description": "Weekdays for placeholder events on evenings that are not booked yet. Use monday, tuesday, wednesday, thursday, friday, saturday, or sunday. Defaults to tuesday and thursday.",

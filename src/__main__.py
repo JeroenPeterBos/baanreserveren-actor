@@ -28,12 +28,7 @@ main_logger = logging.getLogger("src.baanreserveren")
 main_logger.setLevel(logging.DEBUG)
 main_logger.addHandler(handler)
 
-# Execute the Actor main coroutine
-
-
-async def run_main_on_timeout():
-    async with asyncio.timeout(3 * 60):
-        await main()
-
-
-asyncio.run(run_main_on_timeout())
+# The actor timeout used to be a fixed 3 minutes here, before the input was
+# known. main() now applies it after reading the input, and extends it when
+# wait_until / retry_for_seconds need longer than 3 minutes.
+asyncio.run(main())
