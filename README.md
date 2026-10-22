@@ -69,6 +69,8 @@ A few minutes of waiting is within a normal club session. If the logout link dis
 
 A booking run logs the chosen time and opponent. It does not write a dataset row. A calendar run uploads the iCal and JSON reservations to the configured S3 bucket. Placeholder events for Tuesday and Thursday at 20:30 fill evenings that are not booked yet.
 
+A sync with no upcoming reservations still writes those files. Placeholders then start a week from the run. A booking that is still in the future and missing from the club page is left out. Past rows stay, because the club page only lists what is still ahead. `remove_reservations` drops specific `DD-MM-YYYY HH:MM` rows from that stored history before the ICS is written. It defaults to an empty list.
+
 ## Schedule notes
 
 The cron timezone has to be Europe/Amsterdam. The same expression in UTC fires at 08:27 CEST.
